@@ -1,138 +1,61 @@
-name: DataDash QA Automation - 23ds3000079
+name: DataDash QA - 23ds3000079
 
 on:
-  schedule:
-    # Run daily at 9 AM UTC
-    - cron: '0 9 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
   push:
     branches: [ main ]
 
 jobs:
-  scrape-and-sum:
+  scrape:
     runs-on: ubuntu-latest
-    
-    # Step with email in the name as required
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4  # Updated to v4
-      
     - name: Setup Node.js - 23ds3000079@ds.study.iitm.ac.in
-      uses: actions/setup-node@v4  # Updated to v4
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'  # Updated to Node.js 20
+        node-version: '18'
         
-    - name: Install dependencies
-      run: |
-        npm init -y
-        npm install playwright
+    - name: Install Playwright
+      run: npm install playwright
         
-    - name: Install Playwright browsers
-      run: npx playwright install chromium --with-deps
+    - name: Install browsers
+      run: npx playwright install chromium
       
-    - name: Create scrape script - 23ds3000079@ds.study.iitm.ac.in
+    - name: Run scraper
       run: |
-        cat > scrape.js << 'EOF'
+        node -e "
         const { chromium } = require('playwright');
-
-        const SEEDS = [56, 57, 58, 59, 60, 61, 62, 63, 64, 65];
-
-        async function scrapePage(url) {
+        (async () => {
+          const seeds = [56,57,58,59,60,61,62,63,64,65];
+          let total = 0;
           const browser = await chromium.launch();
-          const page = await browser.newPage();
           
-          try {
-            await page.goto(url, { waitUntil: 'networkidle' });
+          for (const seed of seeds) {
+            const page = await browser.newPage();
+            await page.goto('https://data-kw4d.onrender.com/seed' + seed, { timeout: 30000 });
             
-            const numbers = await page.$$eval('table', (tables) => {
-              let allNumbers = [];
-              tables.forEach(table => {
-                const cells = table.querySelectorAll('td, th');
-                cells.forEach(cell => {
-                  const text = cell.textContent.trim();
-                  const number = parseFloat(text);
-                  if (!isNaN(number)) {
-                    allNumbers.push(number);
-                  }
-                });
+            // Wait for content
+            await page.waitForSelector('table', { timeout: 5000 }).catch(() => {});
+            
+            // Get all numbers
+            const nums = await page.evaluate(() => {
+              const numbers = [];
+              document.querySelectorAll('td, th, .number').forEach(el => {
+                const val = parseFloat(el.textContent);
+                if (!isNaN(val)) numbers.push(val);
               });
-              return allNumbers;
+              return numbers;
             });
             
-            return numbers;
-          } finally {
-            await browser.close();
-          }
-        }
-
-        async function main() {
-          let grandTotal = 0;
-          let allNumbers = [];
-          
-          console.log('='.repeat(60));
-          console.log('DataDash QA Automation - 23ds3000079@ds.study.iitm.ac.in');
-          console.log('='.repeat(60) + '\n');
-          
-          for (const seed of SEEDS) {
-            const url = \`https://data-kw4d.onrender.com/seed\${seed}\`;
-            console.log(\`Scraping \${url}...\`);
-            
-            try {
-              const numbers = await scrapePage(url);
-              const sum = numbers.reduce((a, b) => a + b, 0);
-              
-              console.log(\`  Found \${numbers.length} numbers\`);
-              console.log(\`  Numbers: \${numbers.join(', ')}\`);
-              console.log(\`  Sum for seed \${seed}: \${sum}\n\`);
-              
-              grandTotal += sum;
-              allNumbers.push(...numbers);
-            } catch (error) {
-              console.error(\`Error scraping seed \${seed}:\`, error.message);
-            }
+            const sum = nums.reduce((a,b) => a + b, 0);
+            console.log('Seed ' + seed + ': ' + nums.length + ' numbers, sum = ' + sum);
+            total += sum;
+            await page.close();
           }
           
-          console.log('='.repeat(60));
-          console.log(\`TOTAL NUMBERS FOUND: \${allNumbers.length}\`);
-          console.log(\`GRAND TOTAL SUM: \${grandTotal}\`);
-          console.log('='.repeat(60));
-          
-          // Save to file for artifact
-          const fs = require('fs');
-          fs.writeFileSync('results.txt', \`Grand Total: \${grandTotal}\nTotal Numbers: \${allNumbers.length}\`);
-          fs.writeFileSync('results.json', JSON.stringify({
-            total: grandTotal,
-            count: allNumbers.length,
-            numbers: allNumbers,
-            timestamp: new Date().toISOString(),
-            email: '23ds3000079@ds.study.iitm.ac.in'
-          }, null, 2));
-        }
-
-        main().catch(console.error);
-        EOF
-        
-    - name: Run scraping script - 23ds3000079@ds.study.iitm.ac.in
-      run: node scrape.js
-      
-    - name: Display results
-      run: |
-        echo "## 📊 DataDash QA Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Grand Total Sum: \`$(cat results.txt | grep Grand | cut -d' ' -f3)\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "---" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "*Generated by 23ds3000079@ds.study.iitm.ac.in*" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "View the raw results in the artifacts below." >> $GITHUB_STEP_SUMMARY
-        
-    - name: Upload results as artifact
-      uses: actions/upload-artifact@v4  # Updated to v4
-      with:
-        name: scrape-results-23ds3000079
-        path: |
-          results.txt
-          results.json
-        retention-days: 30
-        if-no-files-found: error
+          await browser.close();
+          console.log('\\n' + '='.repeat(50));
+          console.log('GRAND TOTAL: ' + total);
+          console.log('='.repeat(50));
+          console.log('23ds3000079@ds.study.iitm.ac.in');
+        })().catch(console.error);
+        "
