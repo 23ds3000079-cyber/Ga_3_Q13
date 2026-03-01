@@ -1,0 +1,8 @@
+{
+  "name": "playwright-qa-python",
+  "version": "1.0.0",
+  "scripts": {
+    "scrape": "python scrape.py"
+  },
+  "devDependencies": {}
+}
